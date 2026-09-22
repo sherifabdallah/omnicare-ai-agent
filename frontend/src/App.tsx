@@ -1,10 +1,13 @@
-import { useEffect, useMemo, useState } from 'react'
-import { CaseFile } from './components/CaseFile'
-import { Composer } from './components/Composer'
-import { Conversation } from './components/Conversation'
-import { Letterhead } from './components/Letterhead'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Composer, type ComposerHandle } from './components/Composer'
+import { EmptyState } from './components/EmptyState'
+import { Message } from './components/Message'
+import { Sidebar } from './components/Sidebar'
+import { Thinking } from './components/Thinking'
+import { MenuIcon, ShieldIcon } from './components/icons'
 import { useChat } from './hooks/useChat'
 import { useHealth } from './hooks/useHealth'
+import { useTheme } from './hooks/useTheme'
 
 const USER_KEY = 'omnicare.policyholder'
 
@@ -18,60 +21,128 @@ function loadUser(): string {
 
 export default function App() {
   const [userId, setUserId] = useState(loadUser)
-  const line = useHealth()
-  const { entries, sending, send, clear, caseFile } = useChat(userId)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [theme, toggleTheme] = useTheme()
+  const status = useHealth()
+  const { messages, sending, send, clear } = useChat(userId)
+
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const composerRef = useRef<ComposerHandle>(null)
 
   useEffect(() => {
     try {
       localStorage.setItem(USER_KEY, userId)
     } catch {
-      /* ignore */
+      /* storage unavailable */
     }
   }, [userId])
 
-  // Number cited passages once per section, in order of first citation, so the
-  // [n] markers in the correspondence match the case file.
-  const passages = useMemo(() => {
-    const seen = new Map<string, number>()
-    const list: Array<(typeof caseFile.citations)[number] & { number: number }> = []
-    for (const c of caseFile.citations) {
-      if (seen.has(c.section)) continue
-      const number = seen.size + 1
-      seen.set(c.section, number)
-      list.push({ ...c, number })
-    }
-    return { list, numbers: seen }
-  }, [caseFile.citations])
+  // Keep the newest message in view.
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
+  }, [messages.length, sending])
+
+  const submit = useCallback(
+    (prompt: string) => {
+      setMenuOpen(false)
+      void send(prompt)
+    },
+    [send],
+  )
+
+  const newChat = useCallback(() => {
+    setMenuOpen(false)
+    void clear()
+    composerRef.current?.focus()
+  }, [clear])
 
   return (
-    <div className="mx-auto max-w-[1400px]">
-      <Letterhead line={line} />
+    <div className="flex h-dvh overflow-hidden bg-app">
+      {/* Sidebar: permanent on desktop, drawer on mobile */}
+      <aside className="hidden w-64 shrink-0 border-r border-border lg:block">
+        <Sidebar
+          userId={userId}
+          onChangeUser={setUserId}
+          onNewChat={newChat}
+          onQuickAction={submit}
+          status={status}
+          theme={theme}
+          onToggleTheme={toggleTheme}
+        />
+      </aside>
 
-      <main className="grid gap-12 px-4 py-8 sm:px-8 lg:grid-cols-12 lg:px-12">
-        <section className="lg:col-span-7">
-          <Conversation entries={entries} sending={sending} citationNumbers={passages.numbers} onPick={send} />
-          <div className="mt-6">
-            <Composer disabled={sending} onSend={send} />
-          </div>
-        </section>
-
-        <div className="lg:col-span-5">
-          <CaseFile
-            userId={userId}
-            onChangeUser={setUserId}
-            onNewFile={clear}
-            passages={passages.list}
-            ledger={caseFile.ledger}
+      {menuOpen && (
+        <div className="fixed inset-0 z-40 lg:hidden">
+          <button
+            type="button"
+            aria-label="Close menu"
+            onClick={() => setMenuOpen(false)}
+            className="absolute inset-0 bg-black/40"
           />
+          <aside className="absolute inset-y-0 left-0 w-72 border-r border-border shadow-xl">
+            <Sidebar
+              userId={userId}
+              onChangeUser={setUserId}
+              onNewChat={newChat}
+              onQuickAction={submit}
+              status={status}
+              theme={theme}
+              onToggleTheme={toggleTheme}
+              onClose={() => setMenuOpen(false)}
+            />
+          </aside>
         </div>
-      </main>
+      )}
 
-      <footer className="px-4 pb-8 sm:px-8 lg:px-12">
-        <div className="border-t border-rule pt-3 font-mono text-[0.66rem] text-ink-2">
-          Answers are drawn from the OmniCare General Insurance Policy 2026. Claim decisions are made by adjusters, never by
-          this desk.
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
+          <button
+            type="button"
+            onClick={() => setMenuOpen(true)}
+            aria-label="Open menu"
+            className="focus-ring grid size-9 place-items-center rounded-lg text-muted hover:bg-surface-2 hover:text-fg lg:hidden"
+          >
+            <MenuIcon className="size-5" />
+          </button>
+
+          <div className="flex min-w-0 items-center gap-2">
+            <ShieldIcon className="size-4 shrink-0 text-brand lg:hidden" />
+            <h1 className="truncate text-sm font-semibold">Assistant</h1>
+          </div>
+
+          <span className="ml-auto hidden items-center gap-1.5 rounded-full border border-border bg-surface-2 px-2.5 py-1 font-mono text-[0.7rem] text-muted sm:inline-flex">
+            <span className="size-1.5 rounded-full bg-brand" />
+            {userId}
+          </span>
+        </header>
+
+        <div ref={scrollRef} className="flex-1 overflow-y-auto overscroll-contain">
+          <div
+            className={`mx-auto flex max-w-3xl flex-col px-4 py-6 ${
+              messages.length === 0 ? 'min-h-full justify-center' : ''
+            }`}
+          >
+            {messages.length === 0 ? (
+              <EmptyState onPick={submit} />
+            ) : (
+              <div className="space-y-6">
+                {messages.map((message) => (
+                  <Message key={message.id} message={message} />
+                ))}
+                {sending && <Thinking />}
+              </div>
+            )}
+          </div>
         </div>
-      </footer>
+
+        <div className="shrink-0 border-t border-border bg-surface px-4 pt-3 pb-4">
+          <Composer ref={composerRef} disabled={sending} onSend={submit} />
+          <p className="mx-auto mt-2 max-w-3xl text-center text-[0.7rem] text-subtle">
+            Coverage answers come from the OmniCare General Insurance Policy 2026. Claim decisions are made by an
+            adjuster, not by this assistant.
+          </p>
+        </div>
+      </div>
     </div>
   )
 }

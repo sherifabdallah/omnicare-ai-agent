@@ -1,68 +1,82 @@
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
+import { useEffect, useImperativeHandle, useRef, useState, type FormEvent, type KeyboardEvent, type Ref } from 'react'
+import { SendIcon } from './icons'
+
+const MAX = 2000
+
+export interface ComposerHandle {
+  focus: () => void
+}
 
 interface Props {
   disabled: boolean
   onSend: (message: string) => void
+  ref?: Ref<ComposerHandle>
 }
 
-const MAX = 2000
-
-export function Composer({ disabled, onSend }: Props) {
+export function Composer({ disabled, onSend, ref }: Props) {
   const [value, setValue] = useState('')
-  const ref = useRef<HTMLTextAreaElement>(null)
+  const area = useRef<HTMLTextAreaElement>(null)
 
-  // Grow with content, up to a few lines.
+  useImperativeHandle(ref, () => ({ focus: () => area.current?.focus() }), [])
+
+  // Grow with the content, up to ~8 lines.
   useEffect(() => {
-    const el = ref.current
+    const el = area.current
     if (!el) return
-    el.style.height = '0px'
-    el.style.height = `${Math.min(el.scrollHeight, 200)}px`
+    el.style.height = 'auto'
+    el.style.height = `${Math.min(el.scrollHeight, 180)}px`
   }, [value])
 
-  const submit = (e?: FormEvent) => {
-    e?.preventDefault()
+  const submit = (event?: FormEvent) => {
+    event?.preventDefault()
     if (disabled || !value.trim()) return
     onSend(value)
     setValue('')
   }
 
-  const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
+  const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault()
       submit()
     }
   }
 
+  const remaining = MAX - value.length
+  const canSend = !disabled && value.trim().length > 0
+
   return (
-    <form onSubmit={submit} className="border-t border-ink pt-4">
-      <label htmlFor="composer" className="label">
-        Write to the desk
-      </label>
-      <div className="mt-2 grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+    <form onSubmit={submit} className="mx-auto w-full max-w-3xl">
+      <div className="flex items-end gap-2 rounded-xl border border-border bg-surface p-2 shadow-sm transition-colors focus-within:border-brand">
+        <label htmlFor="composer" className="sr-only">
+          Message the assistant
+        </label>
         <textarea
           id="composer"
-          ref={ref}
+          ref={area}
           value={value}
           onChange={(e) => setValue(e.target.value.slice(0, MAX))}
           onKeyDown={onKeyDown}
           rows={1}
-          placeholder="Ask about your coverage, check a claim, or file a new one…"
-          className="w-full resize-none border-b border-rule bg-transparent py-2 font-display text-[1.15rem] leading-snug placeholder:text-ink-2/70 focus:border-ink focus:outline-none"
+          placeholder="Ask about coverage, a claim status, or file a new claim…"
+          className="max-h-[180px] min-h-[2.5rem] flex-1 resize-none bg-transparent px-2 py-2 text-[0.9375rem] leading-relaxed outline-none placeholder:text-subtle"
         />
         <button
           type="submit"
-          disabled={disabled || !value.trim()}
-          className="h-10 border border-ink px-5 font-mono text-[0.72rem] tracking-[0.14em] text-ink uppercase transition-colors duration-150 hover:bg-ink hover:text-paper disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-ink"
+          disabled={!canSend}
+          aria-label="Send message"
+          className="focus-ring grid size-9 shrink-0 place-items-center rounded-lg bg-brand text-brand-fg transition-all hover:bg-brand-hover disabled:cursor-not-allowed disabled:bg-surface-3 disabled:text-subtle"
         >
-          {disabled ? 'Sending' : 'Send'}
+          <SendIcon className="size-4" />
         </button>
       </div>
-      <p className="mt-2 flex justify-between font-mono text-[0.68rem] text-ink-2 tabular">
-        <span>Enter to send · Shift+Enter for a new line</span>
+
+      <div className="mt-1.5 flex items-center justify-between px-1 text-[0.7rem] text-subtle">
         <span>
-          {value.length}/{MAX}
+          <kbd className="font-sans font-medium">Enter</kbd> to send ·{' '}
+          <kbd className="font-sans font-medium">Shift + Enter</kbd> for a new line
         </span>
-      </p>
+        {remaining < 200 && <span className="tabular">{remaining} characters left</span>}
+      </div>
     </form>
   )
 }

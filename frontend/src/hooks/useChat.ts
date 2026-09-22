@@ -1,56 +1,57 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react'
+import { useCallback, useEffect, useReducer, useRef } from 'react'
 import { api, ApiError } from '../api/client'
 import type { ChatResponse, Citation, ToolCall } from '../api/types'
 
-export interface Entry {
+export type MessageVariant = 'normal' | 'blocked' | 'error'
+
+export interface Message {
   id: string
   role: 'user' | 'assistant'
   text: string
   at: string // ISO timestamp
-  blocked?: boolean
-  error?: boolean
+  variant?: MessageVariant
   citations?: Citation[]
   toolCalls?: ToolCall[]
 }
 
 interface State {
-  entries: Entry[]
+  messages: Message[]
   sending: boolean
 }
 
 type Action =
-  | { type: 'hydrate'; entries: Entry[] }
-  | { type: 'send'; entry: Entry }
-  | { type: 'receive'; entry: Entry }
+  | { type: 'hydrate'; messages: Message[] }
+  | { type: 'send'; message: Message }
+  | { type: 'receive'; message: Message }
   | { type: 'clear' }
 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
     case 'hydrate':
-      return { entries: action.entries, sending: false }
+      return { messages: action.messages, sending: false }
     case 'send':
-      return { entries: [...state.entries, action.entry], sending: true }
+      return { messages: [...state.messages, action.message], sending: true }
     case 'receive':
-      return { entries: [...state.entries, action.entry], sending: false }
+      return { messages: [...state.messages, action.message], sending: false }
     case 'clear':
-      return { entries: [], sending: false }
+      return { messages: [], sending: false }
   }
 }
 
-const storageKey = (userId: string) => `omnicare.file.${userId}`
+const storageKey = (userId: string) => `omnicare.chat.${userId}`
 
-function load(userId: string): Entry[] {
+function load(userId: string): Message[] {
   try {
     const raw = localStorage.getItem(storageKey(userId))
-    return raw ? (JSON.parse(raw) as Entry[]) : []
+    return raw ? (JSON.parse(raw) as Message[]) : []
   } catch {
     return []
   }
 }
 
-function persist(userId: string, entries: Entry[]) {
+function persist(userId: string, messages: Message[]) {
   try {
-    localStorage.setItem(storageKey(userId), JSON.stringify(entries))
+    localStorage.setItem(storageKey(userId), JSON.stringify(messages))
   } catch {
     /* storage unavailable: the conversation still lives in memory */
   }
@@ -58,76 +59,67 @@ function persist(userId: string, entries: Entry[]) {
 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`)
 
-function toEntry(reply: ChatResponse): Entry {
+function toMessage(reply: ChatResponse): Message {
   return {
     id: uid(),
     role: 'assistant',
     text: reply.response,
     at: new Date().toISOString(),
-    blocked: reply.blocked,
+    variant: reply.blocked ? 'blocked' : 'normal',
     citations: reply.citations,
     toolCalls: reply.tool_calls,
   }
 }
 
-function failureEntry(err: unknown): Entry {
+function errorMessage(err: unknown): Message {
   const text =
     err instanceof ApiError
       ? err.status === 422
-        ? `The request was rejected: ${err.message}`
+        ? `That request was rejected: ${err.message}`
         : err.message
-      : 'The assistant could not be reached. Is the backend running?'
-  return { id: uid(), role: 'assistant', text, at: new Date().toISOString(), error: true }
+      : 'Could not reach the assistant. Check that the backend is running and try again.'
+  return { id: uid(), role: 'assistant', text, at: new Date().toISOString(), variant: 'error' }
 }
 
 export function useChat(userId: string) {
-  const [state, dispatch] = useReducer(reducer, { entries: [], sending: false })
+  const [state, dispatch] = useReducer(reducer, { messages: [], sending: false })
   const userRef = useRef(userId)
+  const sendingRef = useRef(false)
 
-  // Switch files when the policyholder id changes.
   useEffect(() => {
     userRef.current = userId
-    dispatch({ type: 'hydrate', entries: load(userId) })
+    dispatch({ type: 'hydrate', messages: load(userId) })
   }, [userId])
 
   useEffect(() => {
-    persist(userRef.current, state.entries)
-  }, [state.entries])
+    persist(userRef.current, state.messages)
+  }, [state.messages])
 
-  const send = useCallback(
-    async (message: string) => {
-      const trimmed = message.trim()
-      if (!trimmed || state.sending) return
-      dispatch({ type: 'send', entry: { id: uid(), role: 'user', text: trimmed, at: new Date().toISOString() } })
-      try {
-        const reply = await api.chat({ user_id: userRef.current, message: trimmed })
-        dispatch({ type: 'receive', entry: toEntry(reply) })
-      } catch (err) {
-        dispatch({ type: 'receive', entry: failureEntry(err) })
-      }
-    },
-    [state.sending],
-  )
+  useEffect(() => {
+    sendingRef.current = state.sending
+  }, [state.sending])
+
+  const send = useCallback(async (text: string) => {
+    const message = text.trim()
+    if (!message || sendingRef.current) return
+    sendingRef.current = true
+    dispatch({ type: 'send', message: { id: uid(), role: 'user', text: message, at: new Date().toISOString() } })
+    try {
+      const reply = await api.chat({ user_id: userRef.current, message })
+      dispatch({ type: 'receive', message: toMessage(reply) })
+    } catch (err) {
+      dispatch({ type: 'receive', message: errorMessage(err) })
+    }
+  }, [])
 
   const clear = useCallback(async () => {
     dispatch({ type: 'clear' })
     try {
       await api.reset(userRef.current)
     } catch {
-      /* backend memory is best-effort; the local file is cleared regardless */
+      /* backend memory is best-effort; the local history is cleared regardless */
     }
   }, [])
 
-  // Everything cited or invoked so far, newest first, for the case file panel.
-  const caseFile = useMemo(() => {
-    const citations: Array<Citation & { entryId: string }> = []
-    const ledger: Array<ToolCall & { entryId: string; at: string }> = []
-    for (const entry of state.entries) {
-      entry.citations?.forEach((c) => citations.push({ ...c, entryId: entry.id }))
-      entry.toolCalls?.forEach((t) => ledger.push({ ...t, entryId: entry.id, at: entry.at }))
-    }
-    return { citations, ledger }
-  }, [state.entries])
-
-  return { entries: state.entries, sending: state.sending, send, clear, caseFile }
+  return { messages: state.messages, sending: state.sending, send, clear }
 }

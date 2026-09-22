@@ -12,12 +12,12 @@ python scripts/capture_screenshots.py
 
 | File | Scenario |
 |---|---|
-| `01-home.png` | Letterhead with line status, suggested-correspondence index, empty case file |
-| `02-coverage-citations.png` | Burst-pipe coverage answer, cited passage highlighted, ledger row |
-| `03-claim-status.png` | CLM-8821 lookup with the APPROVED stamp |
+| `01-home.png` | Empty state with suggestion cards, sidebar and service status |
+| `02-coverage-citations.png` | Coverage answer with the Sources panel and tool activity |
+| `03-claim-status.png` | CLM-8821 lookup rendered as a claim card |
 | `04-submit-claim.png` | Submission confirmation with the returned claim id |
 | `05-validation.png` | Rejected claim details explained back to the user |
-| `06-injection-refused.png` | Prompt-injection attempt stamped REFUSED |
+| `06-injection-refused.png` | Prompt-injection attempt shown as a declined request |
 
 Each scenario starts from a clean file (the script clears the backend thread and local history
 first), so every image shows a single exchange.

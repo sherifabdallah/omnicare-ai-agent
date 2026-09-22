@@ -24,9 +24,9 @@ LangGraph agent.
 ```
 ┌───────────────────────────┐   POST /api/v1/chat {user_id, message}   ┌──────────────────────────────────────────────┐
 │  React UI  (frontend/)    │ ───────────────────────────────────────▶ │  FastAPI backend  (backend/app)              │
-│  · correspondence         │                                          │                                              │
-│  · case file: cited       │ ◀─────────────────────────────────────── │  api/v1  controllers + DTOs + mappers        │
-│    passages & desk ledger │   {response, sources, citations,         │      │                                       │
+│  · chat transcript        │                                          │                                              │
+│  · sources + claim cards  │ ◀─────────────────────────────────────── │  api/v1  controllers + DTOs + mappers        │
+│  · tool activity          │   {response, sources, citations,         │      │                                       │
 │  nginx proxies /api/* ──▶ │    tool_calls, blocked}                  │      ▼                                       │
 └───────────────────────────┘                                          │  application/  ConversationService           │
                                                                        │      │  (depends on the Assistant *port*)    │
@@ -277,23 +277,35 @@ message (details go to the server log, never to the client).
 
 ### `DELETE /api/v1/conversations/{user_id}` → `204`
 
-Clears the user's conversation memory (the UI's "New file" button).
+Clears the user's conversation memory (the UI's "New conversation" button).
 
 ## 4. Frontend
 
-`frontend/` is a Vite + React 19 + TypeScript app styled with Tailwind v4. The design direction
-is documented in [`frontend/DESIGN.md`](frontend/DESIGN.md): an editorial **"claim file"** –
-letterhead, typed correspondence instead of chat bubbles, policy passages *highlighted* in a
-case-file panel with numbered citations, a ledger of every tool the desk used, and rubber
-stamps for claim statuses and refusals. One accent colour, hairlines instead of shadows, a
-single animated moment (the stamp being pressed).
+`frontend/` is a Vite + React 19 + TypeScript app styled with Tailwind v4 - a conventional,
+usable assistant interface rather than a novelty one:
+
+- **Familiar chat layout**: fixed sidebar (new conversation, quick actions, policyholder switch,
+  service status, theme toggle), scrolling transcript, composer pinned to the bottom. The sidebar
+  collapses into a drawer below `lg`.
+- **Results people can read**: a claim returned by a tool renders as a **claim card** (id, policy,
+  type, amount, status badge) instead of raw JSON; cited policy passages appear in a collapsible
+  **Sources** panel with the section title, the quoted excerpt and a match score; everything the
+  agent did is summarised under a collapsible *"N actions taken"* row.
+- **Honest states**: distinct treatments for a normal answer, a guardrail refusal ("Request
+  declined") and a transport or provider failure ("Something went wrong"), plus a working
+  indicator while a turn is in flight.
+- **Accessibility and input**: labelled controls, visible focus rings, `aria-live` on the busy
+  state, Enter to send / Shift+Enter for a newline, an auto-growing textarea, a 2000-character
+  limit mirroring the API, and `prefers-reduced-motion` support.
+- **Light and dark themes**, applied before first paint to avoid a flash and persisted per browser.
 
 ```
 frontend/src/
 ├── api/          types.ts (wire DTOs) · client.ts (fetch wrapper, error mapping)
-├── hooks/        useChat.ts (reducer: entries, sending, per-user local persistence) · useHealth.ts
-├── components/   Letterhead · Conversation (+ empty-state index) · Entry · Composer · CaseFile (Passages, Ledger) · Stamp · Markdown
-└── lib/          format.ts (clock, money, tool-call summaries)
+├── hooks/        useChat.ts (reducer + per-user local history) · useHealth.ts · useTheme.ts
+├── components/   Sidebar · Message · Sources · ToolActivity · ClaimCard · StatusBadge
+│                 Composer · EmptyState · Thinking · Markdown · icons
+└── lib/          format.ts (money, time, tool summaries, claim detection)
 ```
 
 In development Vite proxies `/api` to the backend; in Docker nginx does the same, so the browser

@@ -1,156 +1,280 @@
 @import "tailwindcss";
 
-/* ---- Design tokens (see DESIGN.md) ------------------------------------ */
-@theme {
-  --color-paper: #f5f1e8;
-  --color-paper-2: #ece6d8;
-  --color-ink: #1a1714;
-  --color-ink-2: #6b645a;
-  --color-rule: rgb(26 23 20 / 0.18);
-  --color-rule-strong: rgb(26 23 20 / 0.45);
-  --color-stamp: #b8322a;
-  --color-mark: #f3e28b;
+/* Class-based dark mode, toggled on <html> by useTheme. */
+@custom-variant dark (&:where(.dark, .dark *));
 
-  --font-display: "Fraunces", "Iowan Old Style", Georgia, serif;
-  --font-sans: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
-  --font-mono: "IBM Plex Mono", "SFMono-Regular", Menlo, monospace;
+/* ---- Semantic tokens ------------------------------------------------------
+   Defined as runtime CSS variables so light/dark can swap them, then exposed
+   to Tailwind via `@theme inline` (bg-surface, text-fg, border-border, …). */
+:root {
+  --app-bg: #f6f7f9;
+  --surface: #ffffff;
+  --surface-2: #f2f4f7;
+  --surface-3: #e9edf2;
+  --border: #e3e8ee;
+  --border-strong: #cfd6e0;
 
-  --radius-sm: 2px;
+  --fg: #0f172a;
+  --fg-muted: #64748b;
+  --fg-subtle: #94a3b8;
+
+  --brand: #0d9488;
+  --brand-hover: #0f766e;
+  --brand-fg: #ffffff;
+  --brand-subtle: #ecfdf9;
+  --brand-border: #99e6dc;
+
+  --success: #047857;
+  --success-bg: #ecfdf5;
+  --warn: #b45309;
+  --warn-bg: #fffbeb;
+  --danger: #b91c1c;
+  --danger-bg: #fef2f2;
+
+  --ring: rgb(13 148 136 / 0.35);
+  color-scheme: light;
 }
 
-/* ---- Base ---------------------------------------------------------------- */
+.dark {
+  --app-bg: #0b0f14;
+  --surface: #121821;
+  --surface-2: #1a222d;
+  --surface-3: #232d3a;
+  --border: #253040;
+  --border-strong: #35435a;
+
+  --fg: #e8eef6;
+  --fg-muted: #94a3b8;
+  --fg-subtle: #64748b;
+
+  --brand: #2dd4bf;
+  --brand-hover: #5eead4;
+  --brand-fg: #04211d;
+  --brand-subtle: rgb(45 212 191 / 0.12);
+  --brand-border: rgb(45 212 191 / 0.35);
+
+  --success: #34d399;
+  --success-bg: rgb(52 211 153 / 0.12);
+  --warn: #fbbf24;
+  --warn-bg: rgb(251 191 36 / 0.12);
+  --danger: #f87171;
+  --danger-bg: rgb(248 113 113 / 0.12);
+
+  --ring: rgb(45 212 191 / 0.4);
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-app: var(--app-bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+
+  --color-fg: var(--fg);
+  --color-muted: var(--fg-muted);
+  --color-subtle: var(--fg-subtle);
+
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-fg: var(--brand-fg);
+  --color-brand-subtle: var(--brand-subtle);
+  --color-brand-border: var(--brand-border);
+
+  --color-success: var(--success);
+  --color-success-bg: var(--success-bg);
+  --color-warn: var(--warn);
+  --color-warn-bg: var(--warn-bg);
+  --color-danger: var(--danger);
+  --color-danger-bg: var(--danger-bg);
+
+  --font-sans:
+    "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --radius-xl: 14px;
+  --radius-lg: 10px;
+  --radius-md: 8px;
+}
+
+/* ---- Base ------------------------------------------------------------------ */
 html {
-  background: var(--color-paper);
-  color: var(--color-ink);
+  background: var(--app-bg);
+  color: var(--fg);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
 }
 
 body {
   margin: 0;
   min-height: 100dvh;
-  /* faint paper grain: two barely-visible radial washes, no image assets */
-  background-image:
-    radial-gradient(ellipse at 15% 0%, rgb(255 255 255 / 0.55), transparent 55%),
-    radial-gradient(ellipse at 100% 100%, rgb(26 23 20 / 0.05), transparent 50%);
-  background-attachment: fixed;
+}
+
+* {
+  border-color: var(--border);
+}
+
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
 }
 
 ::selection {
-  background: var(--color-mark);
-  color: var(--color-ink);
+  background: var(--brand);
+  color: var(--brand-fg);
 }
 
-/* ---- Typographic utilities ------------------------------------------------ */
-@utility font-display {
-  font-family: var(--font-display);
-  font-variation-settings: "opsz" 72;
+/* Slim scrollbars that match the theme */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: 999px;
 }
 
-@utility label {
-  font-family: var(--font-mono);
-  font-size: 0.6875rem;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--color-ink-2);
-}
-
+/* ---- Utilities ---------------------------------------------------------------- */
 @utility tabular {
   font-variant-numeric: tabular-nums;
 }
 
-/* Highlighter behind a cited passage */
-@utility marked {
-  background: linear-gradient(transparent 8%, var(--color-mark) 8%, var(--color-mark) 92%, transparent 92%);
-  box-decoration-break: clone;
-  -webkit-box-decoration-break: clone;
-  padding: 0 0.15em;
+@utility focus-ring {
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--ring);
+  }
 }
 
-/* Letterhead rule: a heavy line over a hairline */
-@utility double-rule {
-  border-top: 2px solid var(--color-ink);
-  box-shadow: 0 3px 0 -2px var(--color-ink);
-}
-
-/* ---- The one animated moment: a rubber stamp being pressed ----------------- */
-@keyframes stamp-press {
-  0% {
-    transform: rotate(var(--stamp-rotate, -6deg)) scale(1.25);
+/* ---- Motion ------------------------------------------------------------------- */
+@keyframes fade-up {
+  from {
     opacity: 0;
+    transform: translateY(6px);
   }
-  60% {
-    transform: rotate(var(--stamp-rotate, -6deg)) scale(0.97);
-    opacity: 0.9;
-  }
-  100% {
-    transform: rotate(var(--stamp-rotate, -6deg)) scale(1);
-    opacity: 0.85;
+  to {
+    opacity: 1;
+    transform: none;
   }
 }
+@utility animate-in {
+  animation: fade-up 180ms ease-out both;
+}
 
-@utility stamp {
-  display: inline-block;
-  font-family: var(--font-display);
-  font-weight: 800;
-  font-variation-settings: "opsz" 144;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--color-stamp);
-  border: 3px double var(--color-stamp);
-  border-radius: 3px;
-  padding: 0.15em 0.55em;
-  line-height: 1.1;
-  transform: rotate(var(--stamp-rotate, -6deg));
-  opacity: 0.85;
-  mix-blend-mode: multiply;
-  animation: stamp-press 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
-  /* slight ink unevenness */
-  mask-image: radial-gradient(circle at 30% 70%, black 60%, rgb(0 0 0 / 0.85) 100%);
+@keyframes pulse-dot {
+  0%,
+  60%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+@utility dot {
+  animation: pulse-dot 1.2s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .stamp {
-    animation: none;
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
 
-/* Blinking mono cursor for the "reviewing" state */
-@keyframes blink {
-  50% {
-    opacity: 0;
-  }
+/* ---- Markdown inside an assistant message -------------------------------------- */
+.md {
+  font-size: 0.9375rem;
+  line-height: 1.65;
 }
-@utility cursor-blink {
-  animation: blink 1s steps(1) infinite;
+.md > :first-child {
+  margin-top: 0;
 }
-
-/* ---- Markdown inside an entry ------------------------------------------------ */
-.prose-entry p {
-  margin: 0 0 0.75em;
-}
-.prose-entry p:last-child {
+.md > :last-child {
   margin-bottom: 0;
 }
-.prose-entry ul,
-.prose-entry ol {
-  margin: 0.25em 0 0.75em 1.25em;
+.md p {
+  margin: 0 0 0.75em;
 }
-.prose-entry li {
-  margin: 0.15em 0;
+.md ul,
+.md ol {
+  margin: 0.5em 0 0.75em;
+  padding-left: 1.25em;
 }
-.prose-entry strong {
+.md ul {
+  list-style: disc;
+}
+.md ol {
+  list-style: decimal;
+}
+.md li {
+  margin: 0.25em 0;
+}
+.md li::marker {
+  color: var(--fg-subtle);
+}
+.md strong {
   font-weight: 600;
+  color: var(--fg);
 }
-.prose-entry code {
+.md h1,
+.md h2,
+.md h3 {
+  font-weight: 600;
+  margin: 1em 0 0.5em;
+  font-size: 1rem;
+}
+.md code {
   font-family: var(--font-mono);
-  font-size: 0.9em;
-  background: var(--color-paper-2);
-  padding: 0.05em 0.3em;
-  border-radius: 2px;
+  font-size: 0.85em;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  padding: 0.1em 0.35em;
+  border-radius: 5px;
 }
-.prose-entry a {
+.md pre {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.75rem;
+  overflow-x: auto;
+  margin: 0 0 0.75em;
+}
+.md pre code {
+  background: none;
+  border: 0;
+  padding: 0;
+}
+.md a {
+  color: var(--brand);
   text-decoration: underline;
   text-underline-offset: 2px;
+}
+.md table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0 0 0.75em;
+  font-size: 0.875rem;
+}
+.md th,
+.md td {
+  border: 1px solid var(--border);
+  padding: 0.4rem 0.6rem;
+  text-align: left;
+}
+.md th {
+  background: var(--surface-2);
+  font-weight: 600;
 }
