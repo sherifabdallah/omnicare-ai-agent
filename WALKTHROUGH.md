@@ -3,9 +3,10 @@
 This is the markdown alternative to the 2-minute screen recording. Each step shows what the
 user does in the web UI, what happens inside the backend, and the raw API response.
 
-> Screenshots live in `docs/screenshots/` (see the checklist there). Run
+> The screenshots below are generated from the running app by
+> `scripts/capture_screenshots.py` (Playwright), so they always match the current UI. Run
 > `docker compose up --build`, open http://localhost:3000 and follow the numbered steps to
-> reproduce every screen.
+> reproduce every screen yourself.
 
 ---
 
@@ -163,5 +164,3 @@ cd backend && pytest -q
 ```
 
 (The skipped module is the live-provider suite; enable it with `RUN_LIVE_TESTS=1 pytest -m live`.)
-
-![Test run](docs/screenshots/07-tests.png)
