@@ -1,0 +1,36 @@
+services:
+  backend:
+    build: ./backend
+    container_name: omnicare-backend
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATA_DIR: /app/data
+      # Provider settings come from .env (loaded by Compose) or inline, e.g. GROQ_API_KEY=... docker compose up
+      LLM_PROVIDER: ${LLM_PROVIDER:-groq}
+      LLM_MODEL: ${LLM_MODEL:-}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+    volumes:
+      # Mock data lives on the host so submitted claims are visible in ./data/mock_claims.json
+      - ./data:/app/data
+    ports:
+      - "8000:8000"
+    extra_hosts:
+      # Lets LLM_PROVIDER=ollama reach an Ollama server on the host (Linux needs this; Desktop has it built in)
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    container_name: omnicare-frontend
+    # nginx serves the React build and proxies /api/* to the backend service
+    ports:
+      - "3000:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped

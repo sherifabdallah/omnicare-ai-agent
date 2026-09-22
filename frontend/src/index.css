@@ -1,0 +1,156 @@
+@import "tailwindcss";
+
+/* ---- Design tokens (see DESIGN.md) ------------------------------------ */
+@theme {
+  --color-paper: #f5f1e8;
+  --color-paper-2: #ece6d8;
+  --color-ink: #1a1714;
+  --color-ink-2: #6b645a;
+  --color-rule: rgb(26 23 20 / 0.18);
+  --color-rule-strong: rgb(26 23 20 / 0.45);
+  --color-stamp: #b8322a;
+  --color-mark: #f3e28b;
+
+  --font-display: "Fraunces", "Iowan Old Style", Georgia, serif;
+  --font-sans: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", "SFMono-Regular", Menlo, monospace;
+
+  --radius-sm: 2px;
+}
+
+/* ---- Base ---------------------------------------------------------------- */
+html {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  /* faint paper grain: two barely-visible radial washes, no image assets */
+  background-image:
+    radial-gradient(ellipse at 15% 0%, rgb(255 255 255 / 0.55), transparent 55%),
+    radial-gradient(ellipse at 100% 100%, rgb(26 23 20 / 0.05), transparent 50%);
+  background-attachment: fixed;
+}
+
+::selection {
+  background: var(--color-mark);
+  color: var(--color-ink);
+}
+
+/* ---- Typographic utilities ------------------------------------------------ */
+@utility font-display {
+  font-family: var(--font-display);
+  font-variation-settings: "opsz" 72;
+}
+
+@utility label {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-ink-2);
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Highlighter behind a cited passage */
+@utility marked {
+  background: linear-gradient(transparent 8%, var(--color-mark) 8%, var(--color-mark) 92%, transparent 92%);
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  padding: 0 0.15em;
+}
+
+/* Letterhead rule: a heavy line over a hairline */
+@utility double-rule {
+  border-top: 2px solid var(--color-ink);
+  box-shadow: 0 3px 0 -2px var(--color-ink);
+}
+
+/* ---- The one animated moment: a rubber stamp being pressed ----------------- */
+@keyframes stamp-press {
+  0% {
+    transform: rotate(var(--stamp-rotate, -6deg)) scale(1.25);
+    opacity: 0;
+  }
+  60% {
+    transform: rotate(var(--stamp-rotate, -6deg)) scale(0.97);
+    opacity: 0.9;
+  }
+  100% {
+    transform: rotate(var(--stamp-rotate, -6deg)) scale(1);
+    opacity: 0.85;
+  }
+}
+
+@utility stamp {
+  display: inline-block;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-variation-settings: "opsz" 144;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-stamp);
+  border: 3px double var(--color-stamp);
+  border-radius: 3px;
+  padding: 0.15em 0.55em;
+  line-height: 1.1;
+  transform: rotate(var(--stamp-rotate, -6deg));
+  opacity: 0.85;
+  mix-blend-mode: multiply;
+  animation: stamp-press 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  /* slight ink unevenness */
+  mask-image: radial-gradient(circle at 30% 70%, black 60%, rgb(0 0 0 / 0.85) 100%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stamp {
+    animation: none;
+  }
+}
+
+/* Blinking mono cursor for the "reviewing" state */
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+@utility cursor-blink {
+  animation: blink 1s steps(1) infinite;
+}
+
+/* ---- Markdown inside an entry ------------------------------------------------ */
+.prose-entry p {
+  margin: 0 0 0.75em;
+}
+.prose-entry p:last-child {
+  margin-bottom: 0;
+}
+.prose-entry ul,
+.prose-entry ol {
+  margin: 0.25em 0 0.75em 1.25em;
+}
+.prose-entry li {
+  margin: 0.15em 0;
+}
+.prose-entry strong {
+  font-weight: 600;
+}
+.prose-entry code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: var(--color-paper-2);
+  padding: 0.05em 0.3em;
+  border-radius: 2px;
+}
+.prose-entry a {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}

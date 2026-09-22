@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.venv/
+node_modules/
+frontend/dist/
+venv/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Vector store / caches
+.chroma/
+.cache/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Streamlit
+.streamlit/secrets.toml
