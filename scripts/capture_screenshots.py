@@ -90,6 +90,14 @@ def open_clean_page(page: Page, url: str) -> None:
     page.wait_for_selector("text=Correspondence", timeout=15_000)
 
 
+class ReplyFailed(RuntimeError):
+    """The desk answered with a failure notice - never photograph that as a real answer."""
+
+
+# Copy the UI shows when the backend or the provider is unhappy.
+FAILURE_MARKERS = ("temporarily unavailable", "could not be reached", "request was rejected")
+
+
 def send(page: Page, message: str) -> None:
     page.fill("#composer", message)
     page.press("#composer", "Enter")
@@ -102,7 +110,31 @@ def send(page: Page, message: str) -> None:
         }""",
         timeout=REPLY_TIMEOUT_MS,
     )
+    body = page.inner_text("body").lower()
+    for marker in FAILURE_MARKERS:
+        if marker in body:
+            raise ReplyFailed(marker)
     page.wait_for_timeout(700)  # let the stamp animation settle
+
+
+def capture(page: Page, path: Path) -> None:
+    """Screenshot the page cropped to its content.
+
+    `body` is at least one viewport tall, so a plain full-page shot leaves a
+    band of empty paper under short conversations; clip to the footer instead.
+    """
+    height = page.evaluate(
+        """() => {
+            const footer = document.querySelector('footer');
+            const bottom = footer ? footer.getBoundingClientRect().bottom + window.scrollY : 0;
+            return Math.ceil(Math.max(bottom + 24, 400));
+        }"""
+    )
+    page.screenshot(
+        path=str(path),
+        full_page=True,
+        clip={"x": 0, "y": 0, "width": VIEWPORT["width"], "height": height},
+    )
 
 
 def main() -> int:
@@ -128,10 +160,14 @@ def main() -> int:
                 try:
                     send(page, shot.message)
                 except PlaywrightTimeout:
-                    print(f"    ! no reply within {REPLY_TIMEOUT_MS // 1000}s - is the LLM key valid?")
+                    print(f"    ! no reply within {REPLY_TIMEOUT_MS // 1000}s - is the model responding?")
                     browser.close()
                     return 1
-            page.screenshot(path=str(out_dir / f"{shot.name}.png"), full_page=True)
+                except ReplyFailed as exc:
+                    print(f"    ! the desk returned a failure notice ({exc}); check the LLM key and backend logs")
+                    browser.close()
+                    return 1
+            capture(page, out_dir / f"{shot.name}.png")
 
         browser.close()
 
