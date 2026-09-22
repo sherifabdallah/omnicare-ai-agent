@@ -115,7 +115,12 @@ body {
   border-color: var(--border);
 }
 
-:focus-visible {
+/* Buttons and links get an outline; form fields style their own focus (the
+   composer tints its container, inputs use `focus-ring`) so the two do not stack. */
+a:focus-visible,
+button:focus-visible,
+summary:focus-visible,
+[role="button"]:focus-visible {
   outline: 2px solid var(--brand);
   outline-offset: 2px;
 }
