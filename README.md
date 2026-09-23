@@ -164,6 +164,14 @@ can watch the file change. Provider settings can also be passed inline:
 
 Any model can be overridden with `LLM_MODEL`; it must support tool calling.
 
+> **Groq rotates its hosted models.** If start-up or a request fails with `model_not_found`, list
+> what your key can actually use and set `LLM_MODEL` to one of them:
+>
+> ```bash
+> curl -s https://api.groq.com/openai/v1/models \
+>   -H "Authorization: Bearer $GROQ_API_KEY" | jq -r '.data[].id'
+> ```
+
 ### Run without Docker
 
 ```bash
@@ -188,7 +196,7 @@ is baked into the image at build time).
 curl http://localhost:8000/api/v1/health
 ```
 ```json
-{"status":"healthy","version":"1.0.0","llm_provider":"groq","llm_model":"llama-3.3-70b-versatile"}
+{"status":"healthy","version":"1.0.0","llm_provider":"groq","llm_model":"openai/gpt-oss-120b"}
 ```
 
 ### `POST /api/v1/chat`

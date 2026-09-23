@@ -38,11 +38,11 @@ class Shot:
 
 
 SHOTS = [
-    Shot("01-home", None, "Letterhead, suggested-correspondence index, empty case file"),
+    Shot("01-home", None, "Empty state with suggestion cards and the sidebar"),
     Shot(
         "02-coverage-citations",
         "Is water damage from a burst pipe covered? What is the deductible?",
-        "RAG answer with the cited passage highlighted in the case file",
+        "RAG answer with the Sources panel",
     ),
     Shot("03-claim-status", "What is the status of claim CLM-8821?", "Claim lookup rendered as a claim card"),
     Shot(

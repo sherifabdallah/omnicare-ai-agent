@@ -20,7 +20,7 @@ docker compose up --build
 Backend logs at start-up show the RAG index being built and the provider in use:
 
 ```
-INFO app.main: Starting OmniCare assistant (provider=groq model=llama-3.3-70b-versatile)
+INFO app.main: Starting OmniCare assistant (provider=groq model=openai/gpt-oss-120b)
 INFO app.infrastructure.vector_store.chroma_policy_retriever: Indexed 2 policy chunks into 'omnicare_policy'
 INFO:     Uvicorn running on http://0.0.0.0:8000
 ```

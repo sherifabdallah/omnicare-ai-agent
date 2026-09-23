@@ -22,9 +22,12 @@ from langchain_core.outputs import ChatGeneration, ChatResult
 from langgraph.checkpoint.memory import InMemorySaver
 from pydantic import Field
 
-# Make app import/start-up work without real credentials.
-os.environ.setdefault("LLM_PROVIDER", "groq")
-os.environ.setdefault("GROQ_API_KEY", "test-key")
+# Make app import/start-up work without real credentials. Skipped for live runs,
+# where the real provider settings must come from the environment or .env -
+# an env var set here would take precedence over .env and break authentication.
+if os.environ.get("RUN_LIVE_TESTS") != "1":
+    os.environ.setdefault("LLM_PROVIDER", "groq")
+    os.environ.setdefault("GROQ_API_KEY", "test-key")
 
 from app.agent.guardrails import GuardrailPipeline, PromptInjectionGuardrail  # noqa: E402
 from app.agent.orchestration.graph_builder import AgentGraphBuilder  # noqa: E402

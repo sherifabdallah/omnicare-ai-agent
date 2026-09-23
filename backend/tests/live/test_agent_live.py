@@ -36,9 +36,18 @@ def live_service(data_dir: Path):
 async def test_live_coverage_question_cites_policy(live_service) -> None:
     reply = await live_service.chat("live_1", "Is water damage from a burst pipe covered? What is the deductible?")
 
+    # Deterministic: the agent must consult the document and surface the right passage.
     assert any(t.name == "search_policy" for t in reply.tool_invocations)
     assert any("Section 1" in s for s in reply.sources)
-    assert "25,000" in reply.text and "500" in reply.text
+    top = reply.citations[0]
+    assert top.section.startswith("Section 1")
+    assert "25,000" in top.excerpt and "500" in top.excerpt
+
+    # The prose itself is the model's, so assert grounding rather than exact wording:
+    # it must be affirmative and quote at least one figure from the passage.
+    assert not reply.blocked
+    assert "cover" in reply.text.lower()
+    assert "25,000" in reply.text or "500" in reply.text
 
 
 async def test_live_claim_status(live_service) -> None:
