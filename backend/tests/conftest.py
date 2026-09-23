@@ -7,6 +7,7 @@ offline and needs no API key. Live-provider tests live in tests/live.
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 from collections.abc import Iterator
@@ -28,6 +29,9 @@ from pydantic import Field
 if os.environ.get("RUN_LIVE_TESTS") != "1":
     os.environ.setdefault("LLM_PROVIDER", "groq")
     os.environ.setdefault("GROQ_API_KEY", "test-key")
+
+# Tests keep the vector index in memory so a run never writes into ./data.
+os.environ.setdefault("PERSIST_VECTOR_STORE", "false")
 
 from app.agent.guardrails import GuardrailPipeline, PromptInjectionGuardrail  # noqa: E402
 from app.agent.orchestration.graph_builder import AgentGraphBuilder  # noqa: E402
@@ -74,11 +78,31 @@ def tool_call(name: str, args: dict[str, Any], call_id: str = "call_1") -> AIMes
 # --- data ---------------------------------------------------------------------
 
 
+# The claims the suite asserts against. Owned by the tests rather than copied from
+# ./data, because that file is a live store the running app appends to.
+SEED_CLAIMS = [
+    {
+        "claim_id": "CLM-8821",
+        "policy_number": "POL-1092",
+        "claim_type": "Water Damage",
+        "status": "Approved",
+        "amount": 3500.0,
+    },
+    {
+        "claim_id": "CLM-9014",
+        "policy_number": "POL-3341",
+        "claim_type": "Personal Property",
+        "status": "Under Review",
+        "amount": 1200.0,
+    },
+]
+
+
 @pytest.fixture
 def data_dir(tmp_path: Path) -> Path:
-    """A throw-away copy of the mock data so tests never mutate the real files."""
-    for name in ("sample_policy.md", "mock_claims.json"):
-        shutil.copy(REPO_DATA_DIR / name, tmp_path / name)
+    """A throw-away data directory so tests never touch the real files."""
+    shutil.copy(REPO_DATA_DIR / "sample_policy.md", tmp_path / "sample_policy.md")
+    (tmp_path / "mock_claims.json").write_text(json.dumps(SEED_CLAIMS, indent=2), encoding="utf-8")
     return tmp_path
 
 

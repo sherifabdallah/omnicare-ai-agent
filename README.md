@@ -10,10 +10,10 @@ LangGraph agent.
 | Frontend | React 19 + TypeScript + Tailwind v4 (Vite), served by nginx in Docker |
 | Backend | FastAPI, Pydantic v2 – clean / layered architecture (controllers → services → domain ← infrastructure) |
 | Agent | **LangGraph** state machine: guardrail → agent ⇄ tools, per-user memory, structured tool artifacts |
-| RAG | Chroma (in-process) + local ONNX MiniLM embeddings – zero cost, no external calls |
+| RAG | Local Chroma vector store (persisted to disk) + on-CPU ONNX MiniLM embeddings – zero cost, no external calls |
 | LLM | Groq (default, free tier) · OpenAI · Anthropic · Ollama (local) – one env var to switch |
 | Safety | Guardrail pipeline (prompt-injection rules), hardened system prompt, strict tool schemas, turn rollback |
-| Tests | 62 offline pytest tests (unit + integration) + opt-in live-provider tests; CI builds both apps and the images |
+| Tests | 64 offline pytest tests (unit + integration) + opt-in live-provider tests; CI builds both apps and the images |
 
 ---
 
@@ -130,6 +130,53 @@ module.
    for the model and a structured *artifact* (citations) that never passes through the model.
 5. The model answers citing the section; `reply_builder` maps the turn's messages to an
    `AssistantReply` (text, citations, tool invocations); the controller maps it to the `ChatResponse` DTO.
+
+### RAG pipeline (policy question answering)
+
+The vector store is a **local Chroma instance** with **on-CPU embeddings** - no API calls, no
+cost, nothing to provision.
+
+```
+data/sample_policy.md
+        │
+        │  1. CHUNK   markdown_chunker.py
+        │     split on headings so every chunk keeps the section it came from
+        │     (long sections are sub-split with a recursive character splitter)
+        ▼
+   PolicyChunk(id, text, source, document, section, chunk_index)
+        │
+        │  2. EMBED   all-MiniLM-L6-v2 (ONNX, runs locally on CPU)
+        ▼
+   Chroma collection "omnicare_policy"   →  persisted at DATA_DIR/.chroma
+        │                                    (chroma.sqlite3 + HNSW index files)
+        │  3. RETRIEVE   cosine similarity, top-k (RAG_TOP_K, default 3)
+        ▼
+   RetrievedChunk(chunk, score)
+        │
+        │  4. CITE   the search_policy tool returns two things:
+        │            · content  → passages the LLM reasons over
+        │            · artifact → structured citations that bypass the LLM entirely
+        ▼
+   ChatResponse.sources    ["sample_policy.md — Section 1: Home Water Damage Coverage"]
+   ChatResponse.citations  [{source, section, excerpt, score}]
+```
+
+**Why citations are trustworthy:** the excerpt and section shown to the user come from the
+retriever's *artifact*, not from the model's text. The LLM cannot fabricate a citation, because
+it never writes one - it only writes the prose beside it.
+
+**Retrieval is semantic, not keyword.** Words that never appear in the policy still find the
+right section:
+
+| Query | Top match | Score |
+|---|---|---|
+| "my pipe exploded and soaked the floor" | Section 1: Home Water Damage Coverage | 0.46 |
+| "expensive necklace worth 3000 dollars" | Section 2: Personal Property Protection | 0.46 |
+
+**Index lifecycle.** Chunk ids are deterministic, so start-up is an idempotent upsert: unchanged
+chunks are refreshed in place, edited ones overwritten, and chunks deleted from the document are
+removed from the collection. Set `PERSIST_VECTOR_STORE=false` for an in-memory index (the test
+suite does this).
 
 ## 2. Quick start (≈2 minutes)
 
@@ -358,7 +405,7 @@ limiting and JWT/OAuth2 on the API.
 ```bash
 cd backend
 pip install -r requirements-dev.txt
-pytest -q                 # 62 tests, fully offline, ~6 s
+pytest -q                 # 64 tests, fully offline, ~6 s
 ```
 
 | Suite | Covers |
@@ -385,16 +432,26 @@ frontend, then builds both Docker images.
 | `LLM_TEMPERATURE` | `0` | Deterministic answers |
 | `RAG_TOP_K` | `3` | Passages retrieved per query |
 | `RAG_CHUNK_SIZE` / `RAG_CHUNK_OVERLAP` | `800` / `100` | Sub-splitting of long sections |
+| `PERSIST_VECTOR_STORE` | `true` | `false` keeps the Chroma index in memory |
+| `VECTOR_STORE_DIR` | `DATA_DIR/.chroma` | Where the Chroma index is written |
 | `MAX_HISTORY_MESSAGES` | `20` | Conversation window sent to the model |
 | `MAX_AGENT_STEPS` | `8` | Max LLM↔tool iterations per turn |
 | `DATA_DIR` | `./data` | Location of the policy doc and claims file |
 | `LANGSMITH_TRACING` / `LANGSMITH_API_KEY` | unset | Optional tracing of every graph run |
 
-## 9. Limitations & next steps
+## 9. Production considerations
 
-- Memory and the vector index are in-process; for multiple replicas use a Postgres/Redis
-  checkpointer (`agent/memory`) and a persistent Chroma/Qdrant instance (`infrastructure/vector_store`).
-- The API has no authentication; in production put it behind OAuth2/JWT and rate limiting.
-- The claims store is a JSON file by design (assignment scope); the `ClaimsRepository` port makes
-  a SQL implementation a drop-in.
-- Streaming responses (LangGraph `astream_events` → SSE/WebSocket) would improve perceived latency.
+Everything in the brief is implemented and working. These are the deliberate scope choices, and
+what each would become in production:
+
+| Choice here | Why it is fine for this prototype | Production path |
+|---|---|---|
+| Local Chroma, persisted to `DATA_DIR/.chroma` | The brief asks for a local vector store; the corpus is one document | A Chroma/Qdrant server (or pgvector) shared by every replica |
+| Claims stored in `mock_claims.json` | The brief specifies this file as the claims database | Swap in a SQL adapter - `ClaimsRepository` is a port, so nothing above it changes |
+| Conversation memory in-process (`InMemorySaver`) | Single container, single process | `langgraph-checkpoint-postgres` or Redis, changed in one place (`agent/memory`) |
+| No authentication on the API | Local prototype, no user data | OAuth2/JWT on the router plus per-user rate limiting |
+| Rule-based prompt-injection guardrail | Deterministic, fast, unit-testable, cannot itself be jailbroken | Keep it as the first link and append an LLM classifier and output moderation to the `GuardrailPipeline` |
+| Whole answer returned at once | Answers are short | Stream with LangGraph `astream_events` over SSE/WebSocket |
+
+Each row is a one-adapter change, not a rewrite - that is the point of the ports-and-adapters
+layout.

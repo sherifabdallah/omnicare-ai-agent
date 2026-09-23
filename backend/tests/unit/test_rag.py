@@ -54,3 +54,40 @@ def test_retrieval_respects_k_and_empty_query(retriever: ChromaPolicyRetriever) 
     assert len(retriever.search("water", k=1)) == 1
     assert len(retriever.search("water", k=10)) == len(retriever)  # never more than the corpus
     assert retriever.search("   ") == []
+
+
+# --- persistence ------------------------------------------------------------------
+
+
+def test_index_persists_to_disk_and_reopens(data_dir: Path, tmp_path: Path) -> None:
+    store = tmp_path / "chroma"
+
+    first = ChromaPolicyRetriever.from_markdown(data_dir / "sample_policy.md", persist_dir=store)
+    assert store.exists() and any(store.iterdir())  # a real index on disk
+    assert first.search("burst pipe", k=1)[0].chunk.section.startswith("Section 1")
+
+    # A fresh instance reads the existing index rather than starting empty.
+    second = ChromaPolicyRetriever.from_markdown(data_dir / "sample_policy.md", persist_dir=store)
+    assert len(second) == len(first)
+    assert second.search("burst pipe", k=1)[0].chunk.section.startswith("Section 1")
+
+
+def test_reingest_is_idempotent_and_drops_removed_sections(data_dir: Path, tmp_path: Path) -> None:
+    store = tmp_path / "chroma"
+    doc = data_dir / "sample_policy.md"
+
+    retriever = ChromaPolicyRetriever.from_markdown(doc, persist_dir=store)
+    indexed = retriever._collection.count()
+    assert indexed == 2
+
+    # Re-ingesting the same document must not duplicate anything.
+    ChromaPolicyRetriever.from_markdown(doc, persist_dir=store)
+    assert ChromaPolicyRetriever.from_markdown(doc, persist_dir=store)._collection.count() == indexed
+
+    # Shrinking the document removes the stale chunk from the collection.
+    doc.write_text(
+        "# OmniCare General Insurance Policy 2026\n\n## Section 1: Home Water Damage Coverage\n\nCovered.\n",
+        encoding="utf-8",
+    )
+    shrunk = ChromaPolicyRetriever.from_markdown(doc, persist_dir=store)
+    assert shrunk._collection.count() == 1

@@ -40,6 +40,7 @@ def build_container(settings: Settings) -> AppContainer:
         settings.policy_doc_path,
         chunk_size=settings.rag_chunk_size,
         chunk_overlap=settings.rag_chunk_overlap,
+        persist_dir=settings.vector_store_path,
     )
     llm = ChatModelFactory.create(settings)
 

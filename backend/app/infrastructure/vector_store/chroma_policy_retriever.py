@@ -1,8 +1,19 @@
-"""PolicyRetriever adapter: Chroma (in-process) + local ONNX MiniLM embeddings.
+"""PolicyRetriever adapter: a local Chroma vector store with on-CPU embeddings.
 
-Zero external cost: the embedding model runs on CPU. The collection is
-in-memory and rebuilt at start-up because the corpus is tiny and re-ingesting
-is cheaper than reasoning about staleness.
+Pipeline
+--------
+1. `markdown_chunker` splits the policy into section-aware chunks, each keeping
+   the heading it came from - that heading is what we cite.
+2. Every chunk is embedded with Chroma's bundled all-MiniLM-L6-v2 ONNX model,
+   which runs locally on CPU (no API calls, no cost).
+3. Vectors live in a persistent Chroma collection on disk (`DATA_DIR/.chroma`
+   by default), so the index survives restarts instead of being rebuilt.
+4. `search` embeds the query and returns the nearest chunks by cosine
+   similarity, with their section metadata for citations.
+
+Chunk ids are deterministic, so start-up upserts are idempotent: unchanged
+chunks are refreshed in place, edited ones are overwritten, and chunks removed
+from the document are deleted from the collection.
 """
 
 from __future__ import annotations
@@ -22,27 +33,39 @@ COLLECTION_NAME = "omnicare_policy"
 
 
 class ChromaPolicyRetriever:
-    def __init__(self, chunks: list[PolicyChunk]) -> None:
-        self._client = chromadb.EphemeralClient()
+    def __init__(self, chunks: list[PolicyChunk], *, persist_dir: Path | None = None) -> None:
+        if persist_dir is not None:
+            persist_dir.mkdir(parents=True, exist_ok=True)
+            self._client = chromadb.PersistentClient(path=str(persist_dir))
+        else:
+            # Used by tests, where a throw-away index is faster than touching disk.
+            self._client = chromadb.EphemeralClient()
+
         self._collection = self._client.get_or_create_collection(
             name=COLLECTION_NAME,
             embedding_function=DefaultEmbeddingFunction(),
             metadata={"hnsw:space": "cosine"},
         )
         self._chunks_by_id = {chunk.id: chunk for chunk in chunks}
-        self._collection.add(
-            ids=[c.id for c in chunks],
-            documents=[c.text for c in chunks],
-            metadatas=[
-                {"source": c.source, "section": c.section, "document": c.document, "chunk_index": c.chunk_index}
-                for c in chunks
-            ],
+        self._sync(chunks)
+        logger.info(
+            "Vector store ready: %d chunks in '%s' (%s)",
+            self._collection.count(),
+            COLLECTION_NAME,
+            persist_dir or "in-memory",
         )
-        logger.info("Indexed %d policy chunks into '%s'", len(chunks), COLLECTION_NAME)
 
     @classmethod
-    def from_markdown(cls, path: Path, *, chunk_size: int = 800, chunk_overlap: int = 100) -> ChromaPolicyRetriever:
-        return cls(chunk_markdown_policy(path, chunk_size=chunk_size, chunk_overlap=chunk_overlap))
+    def from_markdown(
+        cls,
+        path: Path,
+        *,
+        chunk_size: int = 800,
+        chunk_overlap: int = 100,
+        persist_dir: Path | None = None,
+    ) -> ChromaPolicyRetriever:
+        chunks = chunk_markdown_policy(path, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+        return cls(chunks, persist_dir=persist_dir)
 
     # --- PolicyRetriever port ---------------------------------------------------
 
@@ -64,3 +87,20 @@ class ChromaPolicyRetriever:
             score = max(0.0, min(1.0, 1.0 - float(distance)))
             hits.append(RetrievedChunk(chunk=self._chunks_by_id[chunk_id], score=round(score, 4)))
         return hits
+
+    # --- internals -----------------------------------------------------------------
+
+    def _sync(self, chunks: list[PolicyChunk]) -> None:
+        """Make the collection match the document exactly (idempotent)."""
+        self._collection.upsert(
+            ids=[c.id for c in chunks],
+            documents=[c.text for c in chunks],
+            metadatas=[
+                {"source": c.source, "section": c.section, "document": c.document, "chunk_index": c.chunk_index}
+                for c in chunks
+            ],
+        )
+        stale = set(self._collection.get(include=[])["ids"]) - {c.id for c in chunks}
+        if stale:
+            logger.info("Removing %d chunk(s) no longer in the document", len(stale))
+            self._collection.delete(ids=sorted(stale))

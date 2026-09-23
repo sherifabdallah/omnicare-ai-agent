@@ -53,6 +53,12 @@ class Settings(BaseSettings):
     rag_top_k: int = 3
     rag_chunk_size: int = 800
     rag_chunk_overlap: int = 100
+    vector_store_dir: Path | None = Field(
+        default=None, description="Where the Chroma index lives. Defaults to DATA_DIR/.chroma."
+    )
+    persist_vector_store: bool = Field(
+        default=True, description="Set false to keep the index in memory (used by tests)."
+    )
 
     # --- Agent -------------------------------------------------------------
     max_history_messages: int = 20
@@ -73,6 +79,13 @@ class Settings(BaseSettings):
     @property
     def claims_db_path(self) -> Path:
         return self.data_dir / self.claims_db_name
+
+    @property
+    def vector_store_path(self) -> Path | None:
+        """Directory for the on-disk vector index, or None to keep it in memory."""
+        if not self.persist_vector_store:
+            return None
+        return self.vector_store_dir or (self.data_dir / ".chroma")
 
 
 @lru_cache
