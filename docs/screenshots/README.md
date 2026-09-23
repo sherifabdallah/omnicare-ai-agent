@@ -18,8 +18,9 @@ python scripts/capture_screenshots.py
 | `04-submit-claim.png` | Submission confirmation with the returned claim id |
 | `05-validation.png` | Rejected claim details explained back to the user |
 | `06-injection-refused.png` | Prompt-injection attempt shown as a declined request |
+| `07-dark-mode.png` | The claim lookup again in the dark theme |
 
-Each scenario starts from a clean file (the script clears the backend thread and local history
-first), so every image shows a single exchange.
+Each scenario runs in its own browser context with the backend thread reset first, so every
+image shows exactly one exchange and cannot inherit the previous scenario's transcript.
 
 The test run is quoted as terminal text in the walkthrough rather than a screenshot.

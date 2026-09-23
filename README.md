@@ -15,6 +15,11 @@ LangGraph agent.
 | Safety | Guardrail pipeline (prompt-injection rules), hardened system prompt, strict tool schemas, turn rollback |
 | Tests | 69 offline pytest tests (unit + integration) + opt-in live-provider tests; CI builds both apps and the images |
 
+![Coverage question answered with a cited policy passage](docs/screenshots/02-coverage-citations.png)
+
+*A coverage question: the agent searches the policy vector store, answers from the retrieved
+passage, and shows the exact section it relied on with its match score.*
+
 ---
 
 ## 1. Architecture
@@ -376,6 +381,42 @@ frontend/src/
 
 In development Vite proxies `/api` to the backend; in Docker nginx does the same, so the browser
 only ever talks to one origin.
+
+### The app in action
+
+All six images are generated from the running app by `scripts/capture_screenshots.py`, which
+drives the real UI with Playwright and sends each scenario through the live chat endpoint - so
+they always reflect the current build rather than being staged by hand.
+
+**Empty state** - suggestion cards, quick actions, live service status showing the active model.
+
+![Empty state with suggestion cards](docs/screenshots/01-home.png)
+
+**Claim status lookup** - `get_claim_status` result rendered as a structured claim card with a
+status badge, not raw JSON.
+
+![Claim status shown as a claim card](docs/screenshots/03-claim-status.png)
+
+**Filing a claim** - `submit_claim` validates the arguments, appends the record to
+`mock_claims.json` and returns the confirmation id.
+
+![Claim submitted with its confirmation id](docs/screenshots/04-submit-claim.png)
+
+**Rejected input** - the Pydantic tool schema refuses a malformed policy number, an unsupported
+claim type and a negative amount; the error is fed back to the model, which explains it in plain
+language. Nothing is written.
+
+![Invalid claim details explained back to the user](docs/screenshots/05-validation.png)
+
+**Prompt injection** - the guardrail matches before the model is ever called, the message is
+removed from conversation memory, and the turn is marked `blocked`.
+
+![Prompt injection declined](docs/screenshots/06-injection-refused.png)
+
+**Dark mode** is a first-class theme, applied before first paint so there is no flash.
+
+![The same claim lookup in dark mode](docs/screenshots/07-dark-mode.png)
+
 
 ## 5. Why LangGraph
 
