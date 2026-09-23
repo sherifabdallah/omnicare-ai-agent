@@ -2,6 +2,8 @@ from pathlib import Path
 
 import pytest
 
+from app.application.services import PolicyService
+from app.domain.models.policy import PolicyChunk, RetrievedChunk
 from app.infrastructure.vector_store.chroma_policy_retriever import ChromaPolicyRetriever
 from app.infrastructure.vector_store.markdown_chunker import chunk_markdown_policy
 
@@ -91,3 +93,71 @@ def test_reingest_is_idempotent_and_drops_removed_sections(data_dir: Path, tmp_p
     )
     shrunk = ChromaPolicyRetriever.from_markdown(doc, persist_dir=store)
     assert shrunk._collection.count() == 1
+
+
+# --- relevance filtering -----------------------------------------------------------
+
+
+def make_hits(*scores: float) -> list[RetrievedChunk]:
+    return [
+        RetrievedChunk(
+            chunk=PolicyChunk(
+                id=f"c{i}",
+                text="text",
+                source="sample_policy.md",
+                document="doc",
+                section=f"Section {i}",
+                chunk_index=i,
+            ),
+            score=score,
+        )
+        for i, score in enumerate(scores)
+    ]
+
+
+class StubRetriever:
+    def __init__(self, hits: list[RetrievedChunk]) -> None:
+        self._hits = hits
+
+    def search(self, query: str, *, k: int = 3) -> list[RetrievedChunk]:
+        return self._hits[:k]
+
+    def __len__(self) -> int:
+        return len(self._hits)
+
+
+def test_weak_passages_are_not_cited() -> None:
+    # A clear winner plus noise: only the winner should be cited.
+    service = PolicyService(StubRetriever(make_hits(0.48, 0.02)))
+
+    result = service.search("burst pipe")
+
+    assert [h.score for h in result] == [0.48]
+
+
+def test_comparable_passages_are_all_kept() -> None:
+    # Genuinely ambiguous question: keep both so the model can judge.
+    service = PolicyService(StubRetriever(make_hits(0.42, 0.33)))
+
+    assert len(service.search("what is covered")) == 2
+
+
+def test_best_match_is_always_kept_even_when_weak() -> None:
+    # A vague question should still give the agent something rather than nothing.
+    service = PolicyService(StubRetriever(make_hits(0.05, 0.04)))
+
+    assert [h.score for h in service.search("hello")] == [0.05]
+
+
+def test_empty_retrieval_stays_empty() -> None:
+    assert PolicyService(StubRetriever([])).search("anything") == []
+
+
+def test_real_corpus_cites_one_section_for_a_specific_question(retriever: ChromaPolicyRetriever) -> None:
+    service = PolicyService(retriever, top_k=3)
+
+    water = service.search("my pipe burst and flooded the kitchen")
+    jewelry = service.search("what is the limit on jewelry")
+
+    assert [h.chunk.section for h in water] == ["Section 1: Home Water Damage Coverage"]
+    assert [h.chunk.section for h in jewelry] == ["Section 2: Personal Property Protection"]

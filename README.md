@@ -13,7 +13,7 @@ LangGraph agent.
 | RAG | Local Chroma vector store (persisted to disk) + on-CPU ONNX MiniLM embeddings – zero cost, no external calls |
 | LLM | Groq (default, free tier) · OpenAI · Anthropic · Ollama (local) – one env var to switch |
 | Safety | Guardrail pipeline (prompt-injection rules), hardened system prompt, strict tool schemas, turn rollback |
-| Tests | 64 offline pytest tests (unit + integration) + opt-in live-provider tests; CI builds both apps and the images |
+| Tests | 69 offline pytest tests (unit + integration) + opt-in live-provider tests; CI builds both apps and the images |
 
 ---
 
@@ -172,6 +172,17 @@ right section:
 |---|---|---|
 | "my pipe exploded and soaked the floor" | Section 1: Home Water Damage Coverage | 0.46 |
 | "expensive necklace worth 3000 dollars" | Section 2: Personal Property Protection | 0.46 |
+
+**Only relevant passages are cited.** Similarity ranking always returns the nearest chunks, but
+"nearest" is not "relevant" - with a small corpus the store would return every chunk for every
+question, making the sources list meaningless. `PolicyService` keeps the best match plus any
+passage scoring within `RAG_RELATIVE_CUTOFF` of it and above `RAG_MIN_SCORE`:
+
+| Question | Cited |
+|---|---|
+| "Is water damage from a burst pipe covered?" | Section 1 only (0.77) |
+| "What is the limit on jewelry?" | Section 2 only (0.42) |
+| "Is my laptop covered if it is stolen?" | both (0.20 / 0.16 - genuinely close, so the model judges) |
 
 **Index lifecycle.** Chunk ids are deterministic, so start-up is an idempotent upsert: unchanged
 chunks are refreshed in place, edited ones overwritten, and chunks deleted from the document are
@@ -405,7 +416,7 @@ limiting and JWT/OAuth2 on the API.
 ```bash
 cd backend
 pip install -r requirements-dev.txt
-pytest -q                 # 64 tests, fully offline, ~6 s
+pytest -q                 # 69 tests, fully offline, ~6 s
 ```
 
 | Suite | Covers |
@@ -432,6 +443,8 @@ frontend, then builds both Docker images.
 | `LLM_TEMPERATURE` | `0` | Deterministic answers |
 | `RAG_TOP_K` | `3` | Passages retrieved per query |
 | `RAG_CHUNK_SIZE` / `RAG_CHUNK_OVERLAP` | `800` / `100` | Sub-splitting of long sections |
+| `RAG_MIN_SCORE` | `0.15` | Similarity floor below which a passage is not cited |
+| `RAG_RELATIVE_CUTOFF` | `0.5` | Drop passages scoring below this fraction of the best match |
 | `PERSIST_VECTOR_STORE` | `true` | `false` keeps the Chroma index in memory |
 | `VECTOR_STORE_DIR` | `DATA_DIR/.chroma` | Where the Chroma index is written |
 | `MAX_HISTORY_MESSAGES` | `20` | Conversation window sent to the model |

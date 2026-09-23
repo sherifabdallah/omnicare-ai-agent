@@ -46,7 +46,12 @@ def build_container(settings: Settings) -> AppContainer:
 
     # Application
     claims_service = ClaimsService(claims_repository)
-    policy_service = PolicyService(policy_retriever, top_k=settings.rag_top_k)
+    policy_service = PolicyService(
+        policy_retriever,
+        top_k=settings.rag_top_k,
+        min_score=settings.rag_min_score,
+        relative_cutoff=settings.rag_relative_cutoff,
+    )
 
     # Agent
     graph = (

@@ -22,10 +22,9 @@ async def test_coverage_question_uses_rag_and_returns_citations(make_assistant) 
 
     assert reply.blocked is False
     assert reply.text.startswith("Yes")
-    assert reply.sources == [
-        "sample_policy.md — Section 1: Home Water Damage Coverage",
-        "sample_policy.md — Section 2: Personal Property Protection",
-    ]
+    # Only the passage that actually answers the question is cited; the unrelated
+    # personal-property section is filtered out as a weak match.
+    assert reply.sources == ["sample_policy.md — Section 1: Home Water Damage Coverage"]
     assert reply.citations[0].section.startswith("Section 1")
     assert "$25,000" in reply.citations[0].excerpt
     assert [t.name for t in reply.tool_invocations] == ["search_policy"]

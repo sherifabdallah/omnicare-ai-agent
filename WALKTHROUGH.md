@@ -160,7 +160,7 @@ cd backend && pytest -q
 
 ```
 ..............................................................           [100%]
-64 passed, 1 skipped in 9.13s
+69 passed, 1 skipped in 8.47s
 ```
 
 (The skipped module is the live-provider suite; enable it with `RUN_LIVE_TESTS=1 pytest -m live`.)

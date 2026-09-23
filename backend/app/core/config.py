@@ -51,6 +51,10 @@ class Settings(BaseSettings):
     policy_doc_name: str = "sample_policy.md"
     claims_db_name: str = "mock_claims.json"
     rag_top_k: int = 3
+    rag_min_score: float = Field(default=0.15, description="Passages below this similarity are not cited.")
+    rag_relative_cutoff: float = Field(
+        default=0.5, description="Drop passages scoring below this fraction of the best match."
+    )
     rag_chunk_size: int = 800
     rag_chunk_overlap: int = 100
     vector_store_dir: Path | None = Field(
